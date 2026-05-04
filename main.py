@@ -1,0 +1,151 @@
+"""
+main.py
+DeepFake Shield — Command Line Interface
+
+Usage:
+    python main.py photo.jpg
+    python main.py photo.jpg --strength strong --output protected.png
+    python main.py photo.jpg --strength maximum --verbose
+    python main.py photo.jpg --test-all
+    python main.py --batch ./photos/ --output-dir ./protected/ --strength strong
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from config.settings import Config
+from engine.shield import GoldStandardEngine
+
+
+BANNER = """
+╔══════════════════════════════════════════════════════════╗
+║        DeepFake Shield v5.0  —  Protection Engine        ║
+║     Adversarial Image Immunization | Ensemble PGD         ║
+╚══════════════════════════════════════════════════════════╝
+"""
+
+
+def print_metrics(m: dict):
+    ssim_ok = "[OK]" if m["quality_ok"] else "[!!]"
+    inv_ok  = "[OK]" if m["invisible"]  else "[!!]"
+    print(f"""
+  ┌─────────────────────────────────────┐
+  │         Protection Metrics          │
+  ├─────────────────────────────────────┤
+  │  SSIM              {m['ssim']:.5f}  {ssim_ok}    │
+  │  PSNR              {m['psnr_db']:>7.2f} dB         │
+  │  Max pixel change  {m['max_pixel_change']:>7.2f} / 255      │
+  │  L2 norm           {m['l2_norm']:>10.4f}         │
+  │  Invisible         {str(m['invisible']):<21}│
+  │  Processing time   {m['time_s']:>7.2f} s          │
+  │  Models used       {len(m['models_used']):<21}│
+  └─────────────────────────────────────┘""")
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="main.py",
+        description="DeepFake Shield — Adversarial Image Protection"
+    )
+    p.add_argument("image",       nargs="?",  default=None,       help="Input image path")
+    p.add_argument("--output",    "-o",       metavar="PATH",      help="Output path")
+    p.add_argument("--strength",  "-s",       default="standard",
+                   choices=list(Config.PRESETS),                   help="Protection strength")
+    p.add_argument("--verbose",   "-v",       action="store_true", help="Show progress bar")
+    p.add_argument("--test-all",              action="store_true", help="Run all 4 strengths")
+    p.add_argument("--batch",                 metavar="DIR",       help="Protect all images in folder")
+    p.add_argument("--output-dir",            metavar="DIR",       default="protected_output")
+    p.add_argument("--save-metrics",          metavar="PATH",      help="Save metrics JSON")
+    p.add_argument("--device",                default="auto",      help="cuda / cpu / auto")
+    return p
+
+
+def cmd_protect(engine, args):
+    if not args.image:
+        print("  ERROR: Provide an image path.\n")
+        sys.exit(1)
+    output = args.output or str(
+        Path(args.image).parent / f"{Path(args.image).stem}_protected.png"
+    )
+    result = engine.protect(args.image, output_path=output,
+                             strength=args.strength, verbose=args.verbose)
+    if result["success"]:
+        print(f"\n  ✅ Protection complete!")
+        print(f"  Output : {result['output_path']}")
+        print_metrics(result["metrics"])
+        if args.save_metrics:
+            with open(args.save_metrics, "w") as f:
+                json.dump(result["metrics"], f, indent=2)
+            print(f"\n  Metrics saved → {args.save_metrics}")
+    else:
+        print(f"\n  ❌ FAILED: {result['error']}")
+        sys.exit(1)
+
+
+def cmd_test_all(engine, args):
+    if not args.image:
+        print("  ERROR: Provide an image path.\n")
+        sys.exit(1)
+    out_dir = Path("test_all_results")
+    out_dir.mkdir(exist_ok=True)
+    all_metrics = {}
+    print(f"\n  Testing all 4 strengths on: {args.image}\n")
+    for strength in Config.PRESETS:
+        out = out_dir / f"{strength}.png"
+        print(f"\n  [{strength.upper()}] ─────────────────────────────")
+        result = engine.protect(args.image, output_path=out,
+                                strength=strength, verbose=args.verbose)
+        if result["success"]:
+            print_metrics(result["metrics"])
+            all_metrics[strength] = result["metrics"]
+        else:
+            print(f"  FAILED: {result['error']}")
+    comp = out_dir / "comparison.json"
+    with open(comp, "w") as f:
+        json.dump(all_metrics, f, indent=2)
+    print(f"\n  All done! Results in: {out_dir}/")
+
+
+def cmd_batch(engine, args):
+    src   = Path(args.batch)
+    exts  = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    files = [p for p in src.iterdir() if p.suffix.lower() in exts]
+    if not files:
+        print(f"  ERROR: No images found in {args.batch}")
+        sys.exit(1)
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\n  Batch: {len(files)} images → {out_dir}/\n")
+    ok, fail = 0, 0
+    for f in files:
+        out    = out_dir / f"{f.stem}_protected.png"
+        result = engine.protect(f, output_path=out,
+                                strength=args.strength, verbose=False)
+        if result["success"]:
+            m = result["metrics"]
+            print(f"  [OK] {f.name:<40} SSIM={m['ssim']:.4f}  {m['time_s']:.1f}s")
+            ok += 1
+        else:
+            print(f"  [!!] {f.name:<40} {result['error']}")
+            fail += 1
+    print(f"\n  Batch complete: {ok} protected, {fail} failed.\n")
+
+
+def main():
+    parser = build_parser()
+    args   = parser.parse_args()
+    print(BANNER)
+
+    with GoldStandardEngine(verbose=args.verbose, device=args.device) as engine:
+        if args.batch:
+            cmd_batch(engine, args)
+        elif args.test_all:
+            cmd_test_all(engine, args)
+        else:
+            cmd_protect(engine, args)
+
+
+if __name__ == "__main__":
+    main()
