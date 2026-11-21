@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+weights/
+faces/
+eval_results/
+protected_output/
+test_all_results/
+tune_results/
+tune_run.log
+eval_run.log
+keys/
+*.key
+*.log
+eval_final/

@@ -1,12 +1,23 @@
-# DeepFake Shield v5.0 — Dependencies
+# DeepFake Shield v6 — Dependencies
 # Install: pip install -r requirements.txt
 
-# Core (required)
+# Core
 torch>=2.1.0
 torchvision>=0.16.0
 Pillow>=10.0.0
 numpy>=1.24.0
 
-# Optional — enables face-aware attack (better results)
-# pip install facenet-pytorch
-# facenet-pytorch>=2.5.2
+# v6 face-targeted attack (face detection, surrogate face models)
+facenet-pytorch>=2.5.2
+opencv-python>=4.8
+onnx>=1.15
+onnx2torch>=1.5
+
+# Provenance signing
+cryptography>=41
+
+# Evaluation (held-out ArcFace, InSwapper face-swap test)
+onnxruntime>=1.16
+
+# Tests
+pytest>=7

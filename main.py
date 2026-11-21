@@ -21,8 +21,8 @@ from engine.shield import GoldStandardEngine
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════╗
-║        DeepFake Shield v5.0  —  Protection Engine        ║
-║     Adversarial Image Immunization | Ensemble PGD         ║
+║        DeepFake Shield v6.0  —  Protection Engine        ║
+║   Face-identity cloaking  |  Ed25519 provenance signing   ║
 ╚══════════════════════════════════════════════════════════╝
 """
 
@@ -59,7 +59,27 @@ def build_parser():
     p.add_argument("--output-dir",            metavar="DIR",       default="protected_output")
     p.add_argument("--save-metrics",          metavar="PATH",      help="Save metrics JSON")
     p.add_argument("--device",                default="auto",      help="cuda / cpu / auto")
+    p.add_argument("--sign-key",              metavar="KEY",
+                   help="Sign each protected PNG with this Ed25519 private key (see provenance.cli keygen)")
+    p.add_argument("--signer-name",           default="",          help="Name to put in the signature manifest")
+    p.add_argument("--attack",                default="face",      choices=["face", "legacy"],
+                   help="face = v6 face-targeted full-res attack (default); "
+                        "legacy = DEPRECATED v5 ImageNet ensemble (measured 0%% protection)")
     return p
+
+
+def maybe_sign(args, out_path, metrics):
+    """Sign a protected output if --sign-key was given."""
+    if not args.sign_key:
+        return
+    from provenance.keys import load_private
+    from provenance.manifest import sign_image
+    if not hasattr(args, "_sk"):
+        args._sk = load_private(args.sign_key)
+    claims = {"protected_by": f"DeepFake Shield ({metrics.get('attack', 'legacy-v5')})",
+              "strength": metrics.get("strength", "")}
+    sign_image(str(out_path), args._sk, str(out_path), args.signer_name, claims)
+    print(f"  Signed : {out_path}  (+ {out_path}.provenance.json)")
 
 
 def cmd_protect(engine, args):
@@ -75,6 +95,7 @@ def cmd_protect(engine, args):
         print(f"\n  ✅ Protection complete!")
         print(f"  Output : {result['output_path']}")
         print_metrics(result["metrics"])
+        maybe_sign(args, result["output_path"], result["metrics"])
         if args.save_metrics:
             with open(args.save_metrics, "w") as f:
                 json.dump(result["metrics"], f, indent=2)
@@ -126,6 +147,7 @@ def cmd_batch(engine, args):
         if result["success"]:
             m = result["metrics"]
             print(f"  [OK] {f.name:<40} SSIM={m['ssim']:.4f}  {m['time_s']:.1f}s")
+            maybe_sign(args, out, m)
             ok += 1
         else:
             print(f"  [!!] {f.name:<40} {result['error']}")
@@ -134,11 +156,25 @@ def cmd_batch(engine, args):
 
 
 def main():
+    # Windows consoles/pipes often default to cp1252, which cannot print the banner or emoji.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = build_parser()
     args   = parser.parse_args()
     print(BANNER)
 
-    with GoldStandardEngine(verbose=args.verbose, device=args.device) as engine:
+    if args.attack == "face":
+        from engine.face_shield import FaceShieldEngine
+        engine_cm = FaceShieldEngine(verbose=args.verbose, device=args.device)
+    else:
+        print("  WARNING: --attack legacy (v5) is deprecated. In evaluation it protected 0/14 faces\n"
+              "           against a held-out face recognizer and degrades high-res photos. Use --attack face.\n")
+        engine_cm = GoldStandardEngine(verbose=args.verbose, device=args.device)
+
+    with engine_cm as engine:
         if args.batch:
             cmd_batch(engine, args)
         elif args.test_all:
