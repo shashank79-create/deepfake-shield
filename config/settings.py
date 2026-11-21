@@ -70,6 +70,38 @@ class Config:
     PERCEPTUAL_WEIGHT = True
     TV_WEIGHT         = 0.08
 
+    # ── v6 face-targeted attack (core/face_attack.py) ────────────────────────
+    # Surrogate face-recognition models. ArcFace is NOT allowed here: it is the
+    # held-out evaluator. Add "facenet-casia-webface" for a second surrogate.
+    FACE_SURROGATES = [
+        "facenet-vggface2",                          # InceptionResnetV1, VGGFace2
+        "facenet-casia-webface",                     # InceptionResnetV1, CASIA-WebFace
+        "onnx:weights/buffalo_s/w600k_mbf.onnx",     # MobileFaceNet, WebFace600K (insightface)
+    ]
+    _FACE_EOT = {
+        "eot_samples": 1, "jitter": 0.05,
+        "p_resize": 0.5, "resize_min": 0.5,
+        "p_blur": 0.3,
+        "p_jpeg": 0.5, "jpeg_min": 60,
+        "momentum": 1.0, "alpha_div": 10,
+        # perceptual controls (see evaluation/tune_visibility.py rounds 1-3)
+        "optimizer": "adam", "lambda_ssim": 10.0,
+        "texture_mask": True, "tex_ref": 0.05, "tex_min": 0.3,
+        "chroma_ratio": 0.5,
+    }
+    # Measured on held-out 1920px portraits (ArcFace after a social upload, face SSIM):
+    #   8/255  ~0.75, 0.984 (near invisible, no protection)
+    #   12/255 ~0.51, 0.970 (faint, rarely protects)
+    #   16/255 ~0.31, 0.960 (visible, protects ~2/3)
+    #   20/255 ~0.20, 0.950 (clearly visible, protects ~2/3+)
+    FACE_PRESETS: Dict = {
+        "subtle":   {"steps": 200, "epsilon": 8/255,  **_FACE_EOT},
+        "standard": {"steps": 300, "epsilon": 12/255, **_FACE_EOT},
+        "strong":   {"steps": 300, "epsilon": 16/255, **_FACE_EOT},
+        "maximum":  {"steps": 400, "epsilon": 20/255, **_FACE_EOT},
+    }
+
+    # ── legacy v5 ImageNet-ensemble attack ───────────────────────────────────
     # Protection presets
     # face_epsilon = perturbation ON face skin  (LOW  = clean natural look)
     # bg_epsilon   = perturbation on background (HIGH = strong hidden attack)

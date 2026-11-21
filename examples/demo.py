@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.shield import GoldStandardEngine
+from engine.face_shield import FaceShieldEngine
 
 def main():
     if len(sys.argv) < 2:
@@ -24,7 +24,7 @@ def main():
     print("Strength: standard (recommended)")
     print("This will take 1-3 minutes depending on your hardware...\n")
 
-    with GoldStandardEngine(verbose=True) as engine:
+    with FaceShieldEngine(verbose=True) as engine:
         result = engine.protect(
             image_path,
             output_path="protected_output.png",
