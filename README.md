@@ -59,7 +59,11 @@ not tested.
 git clone https://github.com/shashank79-create/deepfake-shield
 cd deepfake-shield
 pip install -r requirements.txt
+# or, to get the commands deepfake-shield / dfs-provenance / dfs-eval / dfs-weights:
+pip install -e ".[test]"
 ```
+
+Use an editable install (`-e`): model weights are looked up in the repo's `weights/` folder.
 
 Surrogate weights: the two FaceNet models download automatically. The third surrogate (MobileFaceNet) is
 optional but recommended:

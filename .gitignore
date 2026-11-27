@@ -13,3 +13,6 @@ keys/
 *.key
 *.log
 eval_final/
+build/
+*.egg-info/
+dist/
