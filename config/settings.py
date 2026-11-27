@@ -42,10 +42,25 @@ def select_device(requested: str = "auto") -> torch.device:
     return device
 
 
-class Config:
+class _ConfigMeta(type):
+    """Resolve Config.DEVICE on first use, not at import time, so importing the
+    package (tests, the provenance CLI, --help) never probes CUDA or prints."""
+
+    @property
+    def DEVICE(cls) -> torch.device:
+        if cls._device is None:
+            cls._device = select_device("auto")
+        return cls._device
+
+    @DEVICE.setter
+    def DEVICE(cls, value: torch.device) -> None:
+        cls._device = value
+
+
+class Config(metaclass=_ConfigMeta):
     """Single source of truth for all parameters."""
 
-    DEVICE = select_device("auto")
+    _device = None   # see Config.DEVICE (resolved lazily)
 
     # Image sizes
     IMAGE_SIZE = 512    # Internal cap for memory safety
