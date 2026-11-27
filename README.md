@@ -65,8 +65,8 @@ Surrogate weights: the two FaceNet models download automatically. The third surr
 optional but recommended:
 
 ```bash
-curl -L -o buffalo_s.zip https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_s.zip
-python -c "import zipfile; zipfile.ZipFile('buffalo_s.zip').extract('w600k_mbf.onnx', 'weights/buffalo_s')"
+python scripts/download_weights.py            # MobileFaceNet surrogate + ArcFace judge, SHA-256 verified
+python scripts/download_weights.py --check    # verify what is on disk
 ```
 
 The insightface models are released for non-commercial research use only.
@@ -143,11 +143,8 @@ already trust. This is a lightweight scheme in the spirit of C2PA Content Creden
 ## Evaluation
 
 ```bash
-# held-out judge (ArcFace) - never used by the attack
-curl -L -o buffalo_l.zip https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip
-python -c "import zipfile; zipfile.ZipFile('buffalo_l.zip').extract('w600k_r50.onnx', 'weights/buffalo_l')"
-# optional real face-swap test: weights/inswapper/inswapper_128.onnx
-#   (sha256 e4a3f08c753cb72d04e10aa0f7dbe3deebbf39567d4ead6dce08e98aa49e16af)
+python scripts/download_weights.py --only judge   # held-out ArcFace - never used by the attack
+python scripts/download_weights.py --only swap    # optional InSwapper for the face-swap test
 
 python -m evaluation.run_eval --images ./faces --attacks face --strengths standard strong maximum \
        --swap-targets ./other_faces
