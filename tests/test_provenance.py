@@ -131,6 +131,18 @@ def test_keygen_refuses_to_overwrite(tmp_path):
         generate_keypair(str(tmp_path), "me")
 
 
+def test_cli_verify_folder_reports_each_file_and_worst_exit(tmp_path, signed_png, keys):
+    folder = tmp_path / "inbox"
+    folder.mkdir()
+    shutil.copy(signed_png, folder / "good.png")
+    Image.open(signed_png).convert("RGB").save(folder / "unsigned.jpg")
+    out_csv = tmp_path / "report.csv"
+    code = cli(["verify", str(folder), "--csv", str(out_csv)])
+    assert code == 1                                     # worst verdict: UNSIGNED
+    report = out_csv.read_text()
+    assert "good.png,AUTHENTIC" in report and "unsigned.jpg,UNSIGNED" in report
+
+
 def test_cli_round_trip_exit_codes(tmp_path):
     assert cli(["keygen", "--out", str(tmp_path / "k"), "--name", "me"]) == 0
     src = tmp_path / "p.jpg"

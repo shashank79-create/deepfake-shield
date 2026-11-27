@@ -9,6 +9,7 @@ import argparse
 import getpass
 import json
 import sys
+from pathlib import Path
 
 from provenance.keys import generate_keypair, key_id, load_private, load_public
 from provenance.manifest import render_block_map, sign_image, verify_image
@@ -17,6 +18,46 @@ ICON = {"AUTHENTIC": "[OK]", "REENCODED": "[OK]", "MODIFIED": "[!!]", "UNTRUSTED
         "INVALID_SIGNATURE": "[XX]", "UNSIGNED": "[--]"}
 EXIT = {"AUTHENTIC": 0, "REENCODED": 0, "UNSIGNED": 1, "UNTRUSTED_SIGNER": 2, "MODIFIED": 3,
         "INVALID_SIGNATURE": 4}
+
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+def verify_folder(a, trusted) -> int:
+    """Verify every image in a folder: one line each, a count per verdict, optional CSV.
+    --map is treated as an output folder for MODIFIED images. Exit code = the worst verdict."""
+    from collections import Counter
+    from PIL import Image
+    files = sorted(p for p in Path(a.image).iterdir() if p.suffix.lower() in IMAGE_EXTS)
+    if not files:
+        print(f"No images in {a.image}")
+        return 1
+    if a.map:
+        Path(a.map).mkdir(parents=True, exist_ok=True)
+    rows, counts, worst = [], Counter(), 0
+    for f in files:
+        v = verify_image(str(f), trusted, a.registry)
+        counts[v.status] += 1
+        worst = max(worst, EXIT[v.status])
+        if a.map and v.status == "MODIFIED":
+            render_block_map(Image.open(f), v, str(Path(a.map) / f"{f.stem}_changed.png"))
+        rows.append({"file": f.name, "status": v.status, "signer": v.signer.get("name", ""),
+                     "key_id": v.signer.get("key_id", ""), "signed": v.created, "source": v.source,
+                     "changed_regions": len(v.changed_blocks)})
+        if not a.json:
+            print(f"{ICON[v.status]} {v.status:17s} {f.name}"
+                  + (f"  ({len(v.changed_blocks)} regions changed)" if v.status == "MODIFIED" else ""))
+    if a.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        print("\n" + "  ".join(f"{k}: {n}" for k, n in sorted(counts.items())))
+    if a.csv:
+        import csv
+        with open(a.csv, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+    return worst
 
 
 def main(argv=None):
@@ -36,8 +77,9 @@ def main(argv=None):
     s.add_argument("--claim", action="append", default=[], help="key=value claim (repeatable)")
     s.add_argument("--password", action="store_true")
 
-    v = sub.add_parser("verify", help="Verify an image")
-    v.add_argument("image")
+    v = sub.add_parser("verify", help="Verify an image, or every image in a folder")
+    v.add_argument("image", help="Image file or folder")
+    v.add_argument("--csv", help="Folder mode: also write results to this CSV")
     v.add_argument("--trust", action="append", default=[], help="Trusted public key .pub (repeatable)")
     v.add_argument("--registry", help="Folder of *.provenance.json sidecars (for stripped re-uploads)")
     v.add_argument("--map", help="Save a copy with changed regions outlined")
@@ -61,6 +103,8 @@ def main(argv=None):
         return 0
 
     trusted = [load_public(p) for p in a.trust] or None
+    if Path(a.image).is_dir():
+        return verify_folder(a, trusted)
     verdict = verify_image(a.image, trusted, a.registry)
     if a.map and verdict.status == "MODIFIED":
         from PIL import Image
