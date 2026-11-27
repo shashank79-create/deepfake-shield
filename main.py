@@ -68,14 +68,32 @@ def build_parser():
     return p
 
 
+def load_signing_key(path: str, password_prompt=None):
+    """Load the signing key BEFORE the (slow) protection runs, so a wrong path or
+    password fails immediately. Password-encrypted keys are prompted for."""
+    import getpass
+    from provenance.keys import load_private
+    try:
+        return load_private(path)
+    except TypeError:          # cryptography: "Password was not given but private key is encrypted"
+        prompt = password_prompt or getpass.getpass
+        try:
+            return load_private(path, prompt(f"  Password for {path}: "))
+        except ValueError:
+            print("  ERROR: wrong password for the signing key.")
+            sys.exit(1)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"  ERROR: cannot load signing key {path}: {e}")
+        sys.exit(1)
+
+
 def maybe_sign(args, out_path, metrics):
     """Sign a protected output if --sign-key was given."""
     if not args.sign_key:
         return
-    from provenance.keys import load_private
     from provenance.manifest import sign_image
-    if not hasattr(args, "_sk"):
-        args._sk = load_private(args.sign_key)
+    if getattr(args, "_sk", None) is None:
+        args._sk = load_signing_key(args.sign_key)
     claims = {"protected_by": f"DeepFake Shield ({metrics.get('attack', 'legacy-v5')})",
               "strength": metrics.get("strength", "")}
     sign_image(str(out_path), args._sk, str(out_path), args.signer_name, claims)
@@ -165,6 +183,8 @@ def main():
     parser = build_parser()
     args   = parser.parse_args()
     print(BANNER)
+    if args.sign_key:
+        args._sk = load_signing_key(args.sign_key)
 
     if args.attack == "face":
         from engine.face_shield import FaceShieldEngine
