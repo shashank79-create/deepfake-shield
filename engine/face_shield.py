@@ -63,7 +63,7 @@ class FaceShieldEngine:
                 out_img.save(out, format="PNG")
 
             # quality at FULL resolution, on the quantised output actually saved
-            a = torch.from_numpy(np.asarray(img)).permute(2, 0, 1).unsqueeze(0).float() / 255
+            a = torch.from_numpy(np.array(img)).permute(2, 0, 1).unsqueeze(0).float() / 255
             b = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).float() / 255
             ssim = self.qm.ssim(a, b)
             metrics = {
