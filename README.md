@@ -1,4 +1,5 @@
 # DeepFake Shield
+[![tests](https://github.com/shashank79-create/deepfake-shield/actions/workflows/tests.yml/badge.svg)](https://github.com/shashank79-create/deepfake-shield/actions/workflows/tests.yml)
 
 **Face-identity cloaking + cryptographic provenance for your photos.**
 
